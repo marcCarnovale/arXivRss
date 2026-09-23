@@ -12,11 +12,17 @@ Usage (unchanged from older code):
     entries = parse_arxiv_response(tree.getroot(), ns)
 """
 
-import urllib.request
-import urllib.parse
-import xml.etree.ElementTree as ET
 import re
+import time
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime
+
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
+USER_AGENT = "arXivRss/0.1 (+https://github.com/marcCarnovale/arXivRss)"
+REQUEST_TIMEOUT_SECONDS = 30
+REQUEST_INTERVAL_SECONDS = 3
 
 ###############################################################################
 #                               Data Classes
@@ -68,7 +74,7 @@ def getArXivQuery(query_parts, start_date=None, end_date=None, max_results=2000)
     :param end_date:    ignored for server query, used only for local filtering
     :param max_results: how many to retrieve *in one chunk*
     """
-    base_url = "http://export.arxiv.org/api/query?search_query="
+    base_url = f"{ARXIV_API_URL}?search_query="
 
     # Combine query parts
     exprs = []
@@ -106,7 +112,7 @@ def queryArXiv(query_parts, start_date=None, end_date=None):
     all_entries = []
     ns = ""  # we'll store once we parse the first page
 
-    chunk_size = 2000  # max arXiv allows in one page
+    chunk_size = 100
     start_index = 0
     total_collected = 0
 
@@ -114,7 +120,9 @@ def queryArXiv(query_parts, start_date=None, end_date=None):
         # 1) Build page-specific URL
         url = _build_paged_url(query_parts, start_index, chunk_size)
         # 2) Fetch data, parse
-        data = urllib.request.urlopen(url).read().decode("UTF-8")
+        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            data = response.read().decode("UTF-8")
         root = ET.fromstring(data)
         if start_index == 0:
             # Extract namespace from the first page
@@ -134,6 +142,7 @@ def queryArXiv(query_parts, start_date=None, end_date=None):
             break
         # else increment start
         start_index += chunk_size
+        time.sleep(REQUEST_INTERVAL_SECONDS)
 
     # Now we have up to 30000 <entry> items in 'all_entries'.
     # We'll create a new root feed containing them all:
@@ -223,7 +232,7 @@ def _build_paged_url(query_parts, start_index, chunk_size):
     """
     Build a URL for one page of results, ignoring date constraints.
     """
-    base_url = "http://export.arxiv.org/api/query?search_query="
+    base_url = f"{ARXIV_API_URL}?search_query="
     exprs = []
     for field, kw in query_parts:
         exprs.append(build_arxiv_search_expression(field, kw))
