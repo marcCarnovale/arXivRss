@@ -78,11 +78,6 @@ def parse_boolean_expression(expression: str,
     :param NOT:        The textual operator that denotes logical NOT.
     :return:           The root Node of the parse tree.
     """
-    # Escape the operator tokens for safe regex matching
-    AND_esc = re.escape(AND)
-    OR_esc  = re.escape(OR)
-    NOT_esc = re.escape(NOT)
-
     # The stack will hold Node objects for each open delimiter context
     stack: List[Node] = []
     root: Optional[Node] = None
